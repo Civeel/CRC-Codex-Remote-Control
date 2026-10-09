@@ -1,0 +1,24 @@
+{
+  "name": "crc-codex-remote-control",
+  "version": "0.2.0",
+  "description": "CRC: Codex Remote Control — private mobile monitoring and per-request approvals for Codex Desktop.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node scripts/start.mjs",
+    "setup": "node scripts/setup.mjs",
+    "token": "node scripts/token.mjs",
+    "hooks:install": "node scripts/hooks.mjs install",
+    "hooks:uninstall": "node scripts/hooks.mjs uninstall",
+    "doctor": "node scripts/doctor.mjs",
+    "test": "node --test",
+    "balance:check": "node scripts/balance.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
