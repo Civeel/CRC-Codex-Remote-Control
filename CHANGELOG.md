@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 — 2026-10-10
+
+- Away mode retains new approval and question requests while the phone is locked, backgrounded or disconnected.
+- Explicit 24-hour reservation, renewed by online heartbeats; native approval fallback remains available when away mode is disabled.
+- Authoritative pending-request snapshots after stream reconnect, with answer drafts preserved.
+- Explicit native approval/question task states instead of ambiguous inactivity messages.
+- Waiting requests display a clear retained-request message.
+
 ## 0.2.0 — 2026-10-09
 
 - Resumable approval and question requests across phone lock, backgrounding and disconnect.

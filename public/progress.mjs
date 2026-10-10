@@ -35,6 +35,7 @@ export function reduceProgress(previous, event) {
   if(type==='codex.Failed') {p.state='failed';p.phase=event.message || '任务因错误中断';p.activeTools=[];p.failure={reason:event.message || '任务因错误中断',detail:event.meta?.errorDetail || '',category:event.meta?.errorCategory || 'other'};}
   if(type==='codex.Retrying') {p.state='retrying';p.phase=event.message || '请求异常，Codex 正在重试';p.failure={reason:p.phase,detail:event.meta?.errorDetail || '',category:event.meta?.errorCategory || 'other'};}
   if(type==='codex.StatusUncertain') {p.state='uncertain';p.phase=event.message || '任务状态未确认，进度已暂停';}
+  if(['codex.NativeApproval','codex.NativeQuestion'].includes(type)) {p.state='desktop';p.phase=event.message || '等待 Codex 内置界面处理';p.failure=null;}
   if(type==='codex.Activity') {p.state='running';p.phase=event.message || 'Codex 已恢复任务活动';p.failure=null;}
   if (['question.requested','question.waiting','question.resumed'].includes(type)) {p.state='waiting';p.phase='等待你选择或填写回答';}
   if (type==='question.parked') {p.state='parked';p.phase='提问已保留，回来后可继续回答';}

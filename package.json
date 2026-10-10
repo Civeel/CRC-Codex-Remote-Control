@@ -1,6 +1,6 @@
 {
   "name": "crc-codex-remote-control",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CRC: Codex Remote Control — private mobile monitoring and per-request approvals for Codex Desktop.",
   "private": true,
   "type": "module",

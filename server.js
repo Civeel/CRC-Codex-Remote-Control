@@ -24,7 +24,7 @@ const eventsFile = path.join(config.dataDir, 'events.ndjson');
 fs.mkdirSync(path.dirname(eventsFile), { recursive: true });
 app.disable('x-powered-by');
 app.use(express.json({ limit: '256kb' }));
-app.get('/api/health', (req,res) => res.json({app:'crc-codex-remote-control',version:'0.2.0',status:'ok'}));
+app.get('/api/health', (req,res) => res.json({app:'crc-codex-remote-control',version:'0.3.0',status:'ok'}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const clients = new Set();
@@ -102,13 +102,21 @@ const secureHook = (req, res, next) => {
 
 app.post('/api/session', (req, res) => {
   if (req.body?.token !== accessToken) return res.status(401).json({ error: 'unauthorized' });
+  const previousId=req.headers.cookie?.match(/(?:^|;\s*)codex_session=([a-f0-9]+)/)?.[1];
+  if(previousId && sessions.has(previousId)) {mobilePresence.setRemote(previousId,false);sessions.delete(previousId);}
   const id = crypto.randomBytes(24).toString('hex');
   sessions.set(id, { token: accessToken, kind: req.body?.clientKind === 'mobile' ? 'mobile' : 'desktop', expiresAt:Date.now()+28800000 });
+  if(req.body?.clientKind==='mobile' && req.body?.awayMode===true) mobilePresence.setRemote(id,true);
   const secureCookie=req.secure || req.get('x-forwarded-proto')==='https';
   res.setHeader('Set-Cookie', `codex_session=${id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${secureCookie?'; Secure':''}`);
-  res.json({ serverTime: new Date().toISOString(), pending: [...pending.values()], liveApprovalBridge: liveApprovalBridge(), clientKind:sessions.get(id).kind, approvalMode:'resumable' });
+  res.json({ serverTime: new Date().toISOString(), pending: [...pending.values()], liveApprovalBridge: liveApprovalBridge(), clientKind:sessions.get(id).kind, approvalMode:'resumable', remoteEnabled:mobilePresence.remote(id), remoteUntil:mobilePresence.remoteUntil(id) });
 });
-app.get('/api/session', secure, (req, res) => res.json({ serverTime: new Date().toISOString(), pending: [...pending.values()], liveApprovalBridge: liveApprovalBridge(), clientKind:req.panelSession?.kind || 'desktop', approvalMode:'resumable' }));
+app.get('/api/session', secure, (req, res) => res.json({ serverTime: new Date().toISOString(), pending: [...pending.values()], liveApprovalBridge: liveApprovalBridge(), clientKind:req.panelSession?.kind || 'desktop', approvalMode:'resumable', remoteEnabled:mobilePresence.remote(req.panelSessionId), remoteUntil:mobilePresence.remoteUntil(req.panelSessionId) }));
+app.post('/api/remote-mode', secure, (req,res)=>{
+  if(req.panelSession?.kind!=='mobile' || typeof req.body?.enabled!=='boolean') return res.status(400).json({error:'mobile_session_required'});
+  mobilePresence.setRemote(req.panelSessionId,req.body.enabled);
+  res.json({remoteEnabled:mobilePresence.remote(req.panelSessionId),remoteUntil:mobilePresence.remoteUntil(req.panelSessionId)});
+});
 app.get('/api/conversations', secure, (req, res) => res.json(desktopCatalog.snapshot()));
 app.get('/api/account/balance', secure, (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -121,10 +129,11 @@ app.post('/api/presence', secure, (req, res) => {
   if (req.body.active === false) {
     mobilePresence.pause(key); updateApprovalRouting();
   } else if (!mobilePresence.heartbeat(key)) return res.status(409).json({ error:'stream_required' });
+  if(req.body.active!==false && mobilePresence.remote(req.panelSessionId)) mobilePresence.setRemote(req.panelSessionId,true);
   updateApprovalRouting();
   res.json({ mobileOnline: mobilePresence.online() });
 });
-app.get('/api/hooks/mobile-status', secureHook, (req, res) => res.json({ mobileOnline: mobilePresence.online(), approvalProtocol:2, questionProtocol:1, approvalMode:'resumable' }));
+app.get('/api/hooks/mobile-status', secureHook, (req, res) => res.json({ mobileOnline: mobilePresence.online(), remoteEnabled:mobilePresence.remote(), approvalProtocol:2, questionProtocol:1, approvalMode:'resumable' }));
 app.get('/api/events', secure, (req, res) => {
   const after = Number(req.query.after || 0);
   res.json(readEvents().filter(e => e.id > after).slice(0, 500));
@@ -138,6 +147,7 @@ app.get('/api/stream', secure, (req, res) => {
   clients.add(res);
   const mobileKey = req.panelSession?.kind === 'mobile' && validClientId(req.query.clientId) ? presenceKey(req.panelSessionId, req.query.clientId) : null;
   if (mobileKey) mobilePresence.connect(mobileKey, res);
+  res.write(`data: ${JSON.stringify({type:'panel.snapshot',pending:[...pending.values()],remoteEnabled:mobilePresence.remote(req.panelSessionId),remoteUntil:mobilePresence.remoteUntil(req.panelSessionId)})}\n\n`);
   res.on('close', () => {
     clients.delete(res);
     if (mobileKey) { mobilePresence.disconnect(mobileKey, res); updateApprovalRouting(); }

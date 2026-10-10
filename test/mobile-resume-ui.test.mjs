@@ -102,4 +102,10 @@ test('phone reload restores its session and unlock reconnects without losing the
   vm.runInContext('applyEvent({id:6,type:"codex.UserPromptSubmit",conversationId:fixtureQuestion.conversationId,taskId:"new-turn",ts:new Date().toISOString(),message:"继续任务",meta:{}})',context);
   assert.equal(element('taskError').hidden,true);
   assert.equal(element('taskStatus').textContent,'运行中');
+  vm.runInContext('applyEvent({type:"panel.snapshot",pending:[fixtureQuestion],remoteEnabled:true})',context);
+  assert.equal(element('awayMode').checked,true);
+  assert.ok(element('requests').innerHTML.includes('question-fixture'));
+  vm.runInContext('applyEvent({type:"panel.snapshot",pending:[],remoteEnabled:false})',context);
+  assert.ok(!element('requests').innerHTML.includes('question-fixture'));
+  assert.equal(element('awayMode').checked,false);
 });

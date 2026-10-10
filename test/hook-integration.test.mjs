@@ -72,6 +72,21 @@ test('resumable approvals across lock, packet loss and reconnect; desktop decisi
     const offlineHook=runHook({hook_event_name:'PermissionRequest',session_id:'thread-test',turn_id:'offline',tool_name:'Bash',tool_input:{command:'npm install'}});
     assert.equal((await offlineHook.done).output,''); // Native Codex approval remains in charge.
     assert.equal((await session()).pending.length,0);
+    const offlineQuestion=runHook({hook_event_name:'PreToolUse',session_id:'thread-test',turn_id:'offline-question',tool_name:'request_user_input',tool_input:{questions:[{id:'choice',header:'选择',question:'如何继续？',options:[{label:'继续',description:'继续任务'},{label:'停止',description:'停止任务'}]}]}});
+    assert.equal((await offlineQuestion.done).output,'');
+    assert.equal((await session()).pending.length,0);
+    // Away mode keeps NEW approvals on the phone even with no open mobile stream.
+    const awayMode=enabled=>fetch(`${base}/api/remote-mode`,{method:'POST',headers:{cookie,'Content-Type':'application/json'},body:JSON.stringify({enabled})});
+    assert.equal((await awayMode(true)).status,200);
+    assert.equal((await fetch(`${base}/api/hooks/mobile-status`,{headers:{'X-Hook-Token':config.CODEX_HOOK_TOKEN}}).then(r=>r.json())).remoteEnabled,true);
+    const awayHook=runHook({hook_event_name:'PermissionRequest',session_id:'thread-test',turn_id:'away-new',tool_name:'Bash',tool_input:{command:'example-away'}});
+    const awayRequest=await until(async()=>(await session()).pending.find(r=>r.taskId==='away-new'&&r.ready));
+    assert.equal(awayRequest.status,'parked');
+    await new Promise(resolve=>setTimeout(resolve,1200));
+    assert.equal(awayHook.child.exitCode,null);
+    assert.equal((await decide(awayRequest.id,'approved')).status,200);
+    assert.equal(JSON.parse((await awayHook.done).output).hookSpecificOutput.decision.behavior,'allow');
+    assert.equal((await awayMode(false)).status,200);
     const mobileAbort=new AbortController(); streams.push(mobileAbort);
     await openStream(`${base}/api/stream?clientId=${clientId}`,{headers:{cookie},signal:mobileAbort.signal});
     assert.equal((await pulse()).status,200);

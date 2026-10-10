@@ -104,6 +104,7 @@ export class TaskHealth {
     t.lastAt=Math.max(t.lastAt,at);
     if(['codex.UserPromptSubmit','codex.PreToolUse','codex.PostToolUse','codex.Activity','permission.approved','permission.denied','question.answered'].includes(type)) {t.state='running';t.reason=null;}
     if(/^(permission|question)\.(requested|waiting|parked|resumed|desktop|expired)$/.test(type)) t.state='waiting';
+    if(['codex.NativeApproval','codex.NativeQuestion'].includes(type)) t.state='waiting';
     if(type==='codex.Retrying') {t.state='retrying';t.reason=event.message;}
     if(type==='codex.StatusUncertain') t.state='uncertain';
     if(type==='codex.Failed') t.state='failed';

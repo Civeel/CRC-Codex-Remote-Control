@@ -3,6 +3,7 @@ export class MobilePresence {
     this.ttlMs = ttlMs;
     this.now = now;
     this.connections = new Map();
+    this.remoteOwners = new Map();
   }
   connect(key, owner) { this.connections.set(key, { lastSeen:null, owner }); }
   heartbeat(key) {
@@ -20,4 +21,13 @@ export class MobilePresence {
     }
     return false;
   }
+  setRemote(key, enabled, holdMs = 86400000) {
+    if (enabled) this.remoteOwners.set(key, this.now() + holdMs);
+    else this.remoteOwners.delete(key);
+  }
+  remote(key) {
+    for (const [owner, deadline] of this.remoteOwners) if (deadline <= this.now()) this.remoteOwners.delete(owner);
+    return key === undefined ? this.remoteOwners.size > 0 : this.remoteOwners.has(key);
+  }
+  remoteUntil(key) { return this.remote(key) ? this.remoteOwners.get(key) : null; }
 }

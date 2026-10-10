@@ -27,7 +27,7 @@ flowchart LR
 
 1. A trusted Hook creates an approval/question associated with a conversation, turn and tool call.
 2. The callback establishes a renewable waiter before enabling buttons.
-3. Before creating a request, an offline mobile status returns control to native Codex approval or questions. An existing CRC request losing its mobile heartbeat is parked, retaining the same ID and callback for reconnection.
+3. Before creating a request, offline status returns control to native Codex only when no authenticated away-mode reservation remains. Reservations expire after 24 hours and renew with active heartbeats. An existing CRC request losing its mobile heartbeat is parked, retaining the same ID and callback for reconnection.
 4. Mobile reconnection resumes pending requests. A local CRC browser can also decide.
 5. Manual decisions resolve once. Expiry, lost callbacks and terminal tasks invalidate stale submissions.
 6. Explicit native handoff ends the Hook and cannot be reclaimed by mobile.
@@ -35,6 +35,8 @@ flowchart LR
 Question answers are validated, returned to the corresponding Hook as model-visible feedback and never appended to CRC event storage. Each conversation keeps separate IDs and drafts.
 
 TaskHealth reads bounded local Codex records/SQLite data for the current turn. It distinguishes failures, retries, activity and unconfirmed state; it cannot guarantee compatibility with future record formats. AccountBalance caches safe read-only data for 60 seconds, and ProviderBalance only sends existing credentials to the verified configured provider origin.
+
+The event stream sends an authoritative pending-request snapshot after replay on every connection. Clients reconcile pending requests without discarding drafts for retained questions.
 
 ## Data and transport
 

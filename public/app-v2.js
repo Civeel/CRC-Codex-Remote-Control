@@ -60,6 +60,7 @@ function conversations() {
     if (!c.progress?.turnId || c.progress.turnId === r.taskId) {
       c.progress = reduceProgress(c.progress,{type:`${r.kind==='question'?'question':'permission'}.${r.status==='parked'?'parked':'waiting'}`,taskId:r.taskId});
       c.state = c.progress.state;
+      c.lastMessage = r.kind==='question' ? '等待你的回答；请求已保留，暂时没有新活动是正常的' : '等待你的授权；请求已保留，暂时没有新活动是正常的';
     }
     map.set(id,c);
   }
@@ -111,6 +112,12 @@ function renderProgress(c) {
   $('planSteps').hidden = !progress.plan.length;
 }
 function applyEvent(e) {
+  if(e?.type==='panel.snapshot') {
+    pending=new Map((e.pending || []).filter(r=>r.source==='codex-hook').map(r=>[r.id,r]));
+    for(const id of answerDrafts.keys()) if(!pending.has(id)) {answerDrafts.delete(id);answerErrors.delete(id);}
+    if(typeof e.remoteEnabled==='boolean') $('awayMode').checked=e.remoteEnabled;
+    render();return;
+  }
   if (!e?.id || e.id <= lastId) return;
   lastId = e.id; events.push(e);
   if (/^(permission|question)\.(requested|waiting|parked|resumed)$/.test(e.type)) pending.set(e.meta.id,e.meta);
@@ -119,7 +126,7 @@ function applyEvent(e) {
 }
 function connection(message,ok) { $('connectionText').textContent=message; $('dot').parentElement.classList.toggle('ok',ok); renderProgress(conversations().get(selected)); }
 function presenceMessage(online) {
-  $('mobilePresenceText').textContent=online ? '手机审批在线' : '手机离线，请求保留，可用电脑 CRC 审批';
+  $('mobilePresenceText').textContent=online ? '手机审批在线' : $('awayMode').checked ? '外出模式：离线期间新请求也保留' : '手机离线：新请求使用 Codex 内置审批';
 }
 async function heartbeat() {
   if (heartbeatBusy || document.hidden || !streamConnected) return;
@@ -183,10 +190,11 @@ async function connect(restore=false) {
   pausePresence(); streamController?.abort(); streamConnected=false;
   mobileMode=$('phoneApproval').checked;
   try {
-    const login=await fetch('/api/session',restore?{signal:AbortSignal.timeout(8000)}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,clientKind:mobileMode?'mobile':'desktop'}),signal:AbortSignal.timeout(8000)});
+    const login=await fetch('/api/session',restore?{signal:AbortSignal.timeout(8000)}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,clientKind:mobileMode?'mobile':'desktop',awayMode:mobileMode&&$('awayMode').checked}),signal:AbortSignal.timeout(8000)});
     if (!login.ok) {if(restore && login.status===401) {connection('未连接',false);return;} throw Error(restore?'登录已过期，请重新连接':'访问令牌无效');}
     const session=await login.json();
     if(restore && session.clientKind) {mobileMode=session.clientKind==='mobile';$('phoneApproval').checked=mobileMode;}
+    if(typeof session.remoteEnabled==='boolean') $('awayMode').checked=session.remoteEnabled;
     events=[]; lastId=0;
     while (true) {
       const h=await fetch(`/api/events?after=${lastId}`,{signal:AbortSignal.timeout(8000)});
@@ -257,6 +265,18 @@ document.addEventListener('click',async e=>{
 });
 $('connect').onclick=()=>connect(false);
 $('phoneApproval').checked=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints>1);
+$('awayMode').checked=$('phoneApproval').checked;
+$('awayMode').onchange=async()=>{
+  const enabled=$('awayMode').checked;
+  $('awayMode').disabled=true;
+  try {
+    const response=await fetch('/api/remote-mode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled}),signal:AbortSignal.timeout(8000)});
+    if(!response.ok) throw Error('请先以手机审批设备连接');
+    const state=await response.json();$('awayMode').checked=state.remoteEnabled;
+    connection(enabled?'外出模式已开启：离线期间请求保留，最长 24 小时':'外出模式已关闭',streamConnected);
+  } catch(error) {$('awayMode').checked=!enabled;connection(error.message,false);}
+  finally {$('awayMode').disabled=false;}
+};
 $('phoneApproval').onchange=()=>{ if(streamConnected) {if($('token').value.trim()) connect(); else {$('phoneApproval').checked=mobileMode;connection('切换设备类型需重新输入访问令牌',false);}} };
 function resumeVisible() {
   if(document.hidden) return;

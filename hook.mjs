@@ -56,7 +56,11 @@ async function main() {
     const capability=await fetch(base+'/api/hooks/mobile-status',{headers,signal:AbortSignal.timeout(4000)});
     if(!capability.ok) return;
     const questionStatus=await capability.json();
-    if(questionStatus.questionProtocol!==1 || questionStatus.mobileOnline!==true) return;
+    if(questionStatus.questionProtocol!==1) return;
+    if(questionStatus.mobileOnline!==true && questionStatus.remoteEnabled!==true) {
+      await request('/api/hooks/event',{...common,type:'NativeQuestion',message:'外出模式未开启且手机离线，提问已交给 Codex 内置界面；此请求无法从手机接回'});
+      return;
+    }
     const expiresAt=Date.now()+holdMs();
     const created=await request('/api/hooks/question',{...common,...question,toolName:event.tool_name || 'Stop',expiresAt});
     const result=await waitForDecision(created,expiresAt);
@@ -74,7 +78,10 @@ async function main() {
     const presence = await fetch(base + '/api/hooks/mobile-status', { headers, signal: AbortSignal.timeout(4000) });
     if (!presence.ok) return;
     const presenceStatus = await presence.json();
-    if (presenceStatus.mobileOnline !== true) return;
+    if (presenceStatus.mobileOnline !== true && presenceStatus.remoteEnabled !== true) {
+      await request('/api/hooks/event',{...common,type:'NativeApproval',message:'外出模式未开启且手机离线，授权已交给 Codex 内置界面；此请求无法从手机接回'});
+      return;
+    }
     const input = event.tool_input || {};
     const files = affectedFiles(input);
     const timeoutMs=holdMs();
